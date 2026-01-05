@@ -20,7 +20,7 @@ async function handleBacpacTask(action) {
     try {
         const containers = await docker.listContainers();
         if (containers.length === 0) {
-            vscode.window.showErrorMessage('Nenhum container Docker em execução encontrado.');
+            vscode.window.showErrorMessage('No running Docker containers found.');
             return;
         }
 
@@ -31,7 +31,7 @@ async function handleBacpacTask(action) {
         }));
 
         const selectedContainer = await vscode.window.showQuickPick(containerItems, {
-            placeHolder: `Selecione o container SQL Server para ${action}`
+            placeHolder: `Select the SQL Server container for ${action}`
         });
         if (!selectedContainer) return;
 
@@ -40,32 +40,32 @@ async function handleBacpacTask(action) {
 
         if (!sqlPackagePath) {
             const install = await vscode.window.showWarningMessage(
-                'SqlPackage não encontrado. Deseja tentar a instalação automática?',
-                'Sim', 'Não'
+                'SqlPackage not found. Do you want to try automatic installation?',
+                'Yes', 'No'
             );
-            if (install === 'Sim') {
+            if (install === 'Yes') {
                 sqlPackagePath = await installSqlPackage(container, selectedContainer.label);
             } else {
                 return;
             }
         }
 
-        const saPassword = await vscode.window.showInputBox({ prompt: 'Senha do SA', password: true });
+        const saPassword = await vscode.window.showInputBox({ prompt: 'SA Password', password: true });
         if (!saPassword) return;
 
         let dbName;
         if (action === 'Export') {
             const databases = await listDatabases(container, saPassword);
             if (!databases || databases.length === 0) {
-                outputChannel.appendLine("[AVISO] Lista de bancos vazia. Solicitando manual.");
-                dbName = await vscode.window.showInputBox({ prompt: 'Nome do Banco de Dados (Manual)' });
+                outputChannel.appendLine("[WARNING] Database list is empty. Requesting manual entry.");
+                dbName = await vscode.window.showInputBox({ prompt: 'Database Name (Manual)' });
             } else {
-                const selectedDb = await vscode.window.showQuickPick(databases, { placeHolder: 'Selecione o Banco de Dados para exportar' });
+                const selectedDb = await vscode.window.showQuickPick(databases, { placeHolder: 'Select the Database to export' });
                 if (!selectedDb) return;
                 dbName = selectedDb;
             }
         } else {
-            dbName = await vscode.window.showInputBox({ prompt: 'Nome do novo Banco de Dados' });
+            dbName = await vscode.window.showInputBox({ prompt: 'New Database Name' });
         }
         if (!dbName) return;
 
@@ -88,7 +88,7 @@ async function handleBacpacTask(action) {
 
         await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
-            title: `${action === 'Import' ? 'Importando' : 'Exportando'} BACPAC: ${dbName}`,
+            title: `${action === 'Import' ? 'Importing' : 'Exporting'} BACPAC: ${dbName}`,
             cancellable: false
         }, async (progress) => {
             const fileName = `task_${Date.now()}.bacpac`;
@@ -100,7 +100,7 @@ async function handleBacpacTask(action) {
             outputChannel.show();
 
             if (action === 'Import') {
-                progress.report({ message: "Copiando para container..." });
+                progress.report({ message: "Copying to container..." });
                 const cpTerminal = vscode.window.createTerminal('SQL CP');
                 cpTerminal.sendText(`docker cp "${filePath}" ${selectedContainer.label}:${containerPath}`);
                 await new Promise(r => setTimeout(r, 2000));
@@ -118,7 +118,7 @@ async function handleBacpacTask(action) {
                 });
                 await runExecWithProgress(exec, progress);
 
-                progress.report({ message: "Copiando para host..." });
+                progress.report({ message: "Copying to host..." });
                 const cpTerminal = vscode.window.createTerminal('SQL CP');
                 cpTerminal.sendText(`docker cp ${selectedContainer.label}:${containerPath} "${filePath}"`);
                 await new Promise(r => setTimeout(r, 4000));
@@ -126,9 +126,9 @@ async function handleBacpacTask(action) {
             }
         });
 
-        vscode.window.showInformationMessage(`${action} concluído.`);
+        vscode.window.showInformationMessage(`${action} completed.`);
     } catch (err) {
-        outputChannel.appendLine(`[ERRO] ${err.message}`);
+        outputChannel.appendLine(`[ERROR] ${err.message}`);
         vscode.window.showErrorMessage(err.message);
     }
 }
@@ -190,7 +190,7 @@ async function runExecWithProgress(exec, progress) {
             const inspect = await exec.inspect();
             if (!inspect.Running) {
                 clearInterval(timer);
-                if (inspect.ExitCode !== 0) reject(new Error(`SqlPackage falhou (${inspect.ExitCode})`));
+                if (inspect.ExitCode !== 0) reject(new Error(`SqlPackage failed (${inspect.ExitCode})`));
                 else resolve();
             }
         }, 500);
