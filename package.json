@@ -1,0 +1,31 @@
+{
+  "name": "docker-bacpac-manager",
+  "displayName": "Docker SQL Bacpac Tool",
+  "description": "Import and Export BACPAC files to/from SQL Server Docker containers",
+  "version": "1.4.0",
+  "publisher": "custom",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "activationEvents": [],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "docker-sql-import.importBacpac",
+        "title": "SQL: Import Bacpac to Docker"
+      },
+      {
+        "command": "docker-sql-import.exportBacpac",
+        "title": "SQL: Export Bacpac from Docker"
+      }
+    ]
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0",
+    "@types/node": "^16.x"
+  },
+  "dependencies": {
+    "dockerode": "^4.0.2"
+  }
+}
