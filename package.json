@@ -2,7 +2,7 @@
   "name": "docker-bacpac-manager",
   "displayName": "Docker SQL Bacpac Tool",
   "description": "Import and Export BACPAC files to/from SQL Server Docker containers",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "publisher": "jorgedorio",
   "engines": {
     "vscode": "^1.80.0"
@@ -29,6 +29,10 @@
       {
         "command": "docker-sql-import.exportBacpac",
         "title": "SQL: Export Bacpac from Docker"
+      },
+      {
+        "command": "docker-sql-import.deleteDatabase",
+        "title": "SQL: Delete Database from Docker"
       }
     ]
   },

@@ -13,7 +13,93 @@ function activate(context) {
         await handleBacpacTask('Export');
     });
 
-    context.subscriptions.push(importDisposable, exportDisposable, outputChannel);
+    let deleteDisposable = vscode.commands.registerCommand('docker-sql-import.deleteDatabase', async () => {
+        await handleDeleteDatabase();
+    });
+
+    context.subscriptions.push(importDisposable, exportDisposable, deleteDisposable, outputChannel);
+}
+
+async function handleDeleteDatabase() {
+    try {
+        const containers = await docker.listContainers();
+        if (containers.length === 0) {
+            vscode.window.showErrorMessage('No running Docker containers found.');
+            return;
+        }
+
+        const containerItems = containers.map(c => ({
+            label: c.Names[0].replace('/', ''),
+            description: c.Image,
+            id: c.Id
+        }));
+
+        const selectedContainer = await vscode.window.showQuickPick(containerItems, {
+            placeHolder: 'Select the SQL Server container'
+        });
+        if (!selectedContainer) return;
+
+        const saPassword = await vscode.window.showInputBox({ prompt: 'SA Password', password: true });
+        if (!saPassword) return;
+
+        const container = docker.getContainer(selectedContainer.id);
+        const databases = await listDatabases(container, saPassword);
+
+        if (!databases || databases.length === 0) {
+            vscode.window.showInformationMessage('No user databases found.');
+            return;
+        }
+
+        const selectedDb = await vscode.window.showQuickPick(databases, { placeHolder: 'Select the Database to DELETE' });
+        if (!selectedDb) return;
+
+        const confirm = await vscode.window.showWarningMessage(
+            `Are you sure you want to delete database [${selectedDb}]? This cannot be undone.`,
+            { modal: true },
+            'Yes'
+        );
+        if (confirm !== 'Yes') return;
+
+        const sqlCmdPath = await findSqlCmd(container);
+        const query = `ALTER DATABASE [${selectedDb}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [${selectedDb}];`;
+        
+        const exec = await container.exec({
+            Cmd: [sqlCmdPath, "-S", "localhost", "-U", "sa", "-P", saPassword, "-Q", query, "-b", "-C"],
+            AttachStdout: true, AttachStderr: true
+        });
+
+        const stream = await exec.start();
+        
+        await new Promise((resolve, reject) => {
+            let errorOutput = '';
+            stream.on('data', chunk => {
+                let offset = 0;
+                while (offset < chunk.length) {
+                    const length = chunk.readUInt32BE(offset + 4);
+                    errorOutput += chunk.slice(offset + 8, offset + 8 + length).toString('utf8');
+                    offset += 8 + length;
+                }
+            });
+
+            const checkStatus = setInterval(async () => {
+                const inspect = await exec.inspect();
+                if (!inspect.Running) {
+                    clearInterval(checkStatus);
+                    if (inspect.ExitCode !== 0) {
+                        reject(new Error(errorOutput || `Exit Code: ${inspect.ExitCode}`));
+                    } else {
+                        resolve();
+                    }
+                }
+            }, 200);
+        });
+
+        vscode.window.showInformationMessage(`Database ${selectedDb} deleted successfully.`);
+    } catch (err) {
+        outputChannel.appendLine(`[DELETE ERROR] ${err.message}`);
+        outputChannel.show();
+        vscode.window.showErrorMessage(`Failed to delete: ${err.message}`);
+    }
 }
 
 async function handleBacpacTask(action) {
